@@ -24,7 +24,7 @@ func New(apiKey string) (*GeminiClient, error) {
 
 func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 	model := gc.client.GenerativeModel("gemini-pro")
-	model.SetMaxOutputTokens(100)
+	model.SetMaxOutputTokens(300)
 	resp, err := model.GenerateContent(gc.ctx, genai.Text(ask))
 	if err != nil {
 		return "Gemini已麻。", err
@@ -38,7 +38,7 @@ func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 		}
 	}
 	if text == "" {
-		text = "我没什么好说的。"
+		text = "我擦，我不好说。"
 	}
 	return text, nil
 }
