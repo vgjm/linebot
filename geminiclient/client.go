@@ -27,7 +27,12 @@ func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 	model.SetMaxOutputTokens(100)
 	resp, err := model.GenerateContent(gc.ctx, genai.Text(ask))
 	if err != nil {
-		return "", err
+		switch err.(type) {
+		case *genai.BlockedError:
+			return "底线！", nil
+		default:
+			return "", err
+		}
 	}
 	var text string
 	for _, v := range resp.Candidates {
