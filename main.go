@@ -79,10 +79,10 @@ func main() {
 						resp, err := geminiClient.SingleQuestion(strings.Replace(message.Text, "/", "", 1))
 						if err != nil {
 							log.Err(err).Msg("Failed to call Gemini API")
-						} else {
-							if err := lineClient.ReplyMessage(e.ReplyToken, resp); err != nil {
-								log.Err(err).Msg("Failed to reply message")
-							}
+							resp = "Genmini已麻。"
+						}
+						if err := lineClient.ReplyMessage(e.ReplyToken, resp); err != nil {
+							log.Err(err).Msg("Failed to reply message")
 						}
 					}
 				default:
