@@ -30,9 +30,11 @@ func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 		return "", err
 	}
 	var text string
-	for _, v := range resp.Candidates {
-		for _, u := range v.Content.Parts {
-			text += fmt.Sprintf("%v", u)
+	for _, cand := range resp.Candidates {
+		if cand.Content != nil {
+			for _, part := range cand.Content.Parts {
+				text += fmt.Sprintln(part)
+			}
 		}
 	}
 	return text, nil
