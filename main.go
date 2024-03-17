@@ -94,6 +94,10 @@ func main() {
 		}
 	})
 
+	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Fprintf(w, "Line bot is running normally.")
+	})
+
 	// This is just sample code.
 	// For actual use, you must support HTTPS by using `ListenAndServeTLS`, a reverse proxy or something else.
 	port := os.Getenv("PORT")
