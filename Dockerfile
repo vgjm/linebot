@@ -8,8 +8,11 @@ RUN go mod download && go mod verify
 COPY . .
 RUN go build -o /bin/app
 
-FROM debian:latest
+FROM ubuntu:latest
 COPY --from=build /bin/app /bin/app
+RUN apt-get update
+RUN apt-get install -y ca-certificates
+RUN update-ca-certificates
 
 EXPOSE 5000
 CMD ["/bin/app"]
