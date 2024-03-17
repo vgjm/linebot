@@ -27,7 +27,7 @@ func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 	model.SetMaxOutputTokens(100)
 	resp, err := model.GenerateContent(gc.ctx, genai.Text(ask))
 	if err != nil {
-		return "", err
+		return "Gemini已麻。", err
 	}
 	var text string
 	for _, cand := range resp.Candidates {
@@ -36,6 +36,9 @@ func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 				text += fmt.Sprintln(part)
 			}
 		}
+	}
+	if text == "" {
+		text = "我没什么好说的。"
 	}
 	return text, nil
 }
