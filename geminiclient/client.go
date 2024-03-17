@@ -24,6 +24,7 @@ func New(apiKey string) (*GeminiClient, error) {
 
 func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 	model := gc.client.GenerativeModel("gemini-pro")
+	model.SetMaxOutputTokens(100)
 	resp, err := model.GenerateContent(gc.ctx, genai.Text(ask))
 	if err != nil {
 		return "", err
