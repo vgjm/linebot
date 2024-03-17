@@ -1,9 +1,8 @@
 package lineclient
 
 import (
-	"log"
-
 	"github.com/line/line-bot-sdk-go/v8/linebot/messaging_api"
+	"github.com/rs/zerolog/log"
 )
 
 type LineClient struct {
@@ -33,7 +32,7 @@ func (client *LineClient) ReplyMessage(replyToken string, text string) error {
 	); err != nil {
 		return err
 	} else {
-		log.Println("Sent text reply.")
+		log.Debug().Msg("Sent text reply.")
 	}
 	return nil
 }

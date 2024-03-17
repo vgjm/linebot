@@ -2,7 +2,15 @@ module github.com/vgjm/linebot
 
 go 1.22.1
 
-require github.com/line/line-bot-sdk-go/v8 v8.4.0
+require (
+	github.com/line/line-bot-sdk-go/v8 v8.4.0
+	github.com/rs/zerolog v1.32.0
+)
+
+require (
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+)
 
 require (
 	cloud.google.com/go v0.110.8 // indirect
@@ -21,7 +29,7 @@ require (
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.13.0 // indirect
 	golang.org/x/sync v0.4.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/api v0.149.0
 	google.golang.org/appengine v1.6.7 // indirect

@@ -17,38 +17,42 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/line/line-bot-sdk-go/v8/linebot/webhook"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/vgjm/linebot/geminiclient"
 	"github.com/vgjm/linebot/lineclient"
 	"github.com/vgjm/linebot/router"
 )
 
 func main() {
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
 	channelSecret := os.Getenv("LINE_CHANNEL_SECRET")
 
 	lineClient, err := lineclient.New(os.Getenv("LINE_CHANNEL_TOKEN"))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("Failed to start Line client")
 	}
 
 	geminiClient, err := geminiclient.New(os.Getenv("GEMINI_API_KEY"))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("Failed to start Gemini client")
 	}
 	defer geminiClient.Close()
 
 	// Setup HTTP Server for receiving requests from LINE platform
 	http.HandleFunc("/callback", func(w http.ResponseWriter, req *http.Request) {
-		log.Println("/callback called...")
+		log.Debug().Msg("/callback called...")
 
 		cb, err := webhook.ParseRequest(channelSecret, req)
 		if err != nil {
-			log.Printf("Cannot parse request: %+v\n", err)
+			log.Err(err).Msg("Cannot parse request")
 			if errors.Is(err, webhook.ErrInvalidSignature) {
 				w.WriteHeader(400)
 			} else {
@@ -57,9 +61,9 @@ func main() {
 			return
 		}
 
-		log.Println("Handling events...")
+		log.Debug().Msg("Handling events...")
 		for _, event := range cb.Events {
-			log.Printf("/callback called%+v...\n", event)
+			log.Debug().Msgf("Event type: %v", event.GetType())
 
 			switch e := event.(type) {
 			case webhook.MessageEvent:
@@ -69,23 +73,23 @@ func main() {
 					switch mType {
 					case router.MENU:
 						if err := lineClient.ReplyMessage(e.ReplyToken, "菜单"); err != nil {
-							log.Printf("Failed to reply message: %+v\n", err)
+							log.Err(err).Msg("Failed to reply message")
 						}
 					case router.AI_REPLY:
 						resp, err := geminiClient.SingleQuestion(strings.Replace(message.Text, "/", "", 1))
 						if err != nil {
-							log.Printf("Failed to call gemini: %+v\n", err)
+							log.Err(err).Msg("Failed to call Gemini API")
 						} else {
 							if err := lineClient.ReplyMessage(e.ReplyToken, resp); err != nil {
-								log.Printf("Failed to reply message: %+v\n", err)
+								log.Err(err).Msg("Failed to reply message")
 							}
 						}
 					}
 				default:
-					log.Printf("Unsupported message content: %T\n", e.Message)
+					log.Info().Msgf("Unsupported message content: %T\n", e.Message)
 				}
 			default:
-				log.Printf("Unsupported message: %T\n", event)
+				log.Info().Msgf("Unsupported message: %T\n", event)
 			}
 		}
 	})
@@ -98,6 +102,6 @@ func main() {
 	}
 	fmt.Println("http://localhost:" + port + "/")
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err)
 	}
 }
