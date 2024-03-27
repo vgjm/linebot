@@ -24,11 +24,50 @@ func New(apiKey string) (*GeminiClient, error) {
 
 func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 	model := gc.client.GenerativeModel("gemini-pro")
-	model.SetMaxOutputTokens(300)
-	resp, err := model.GenerateContent(gc.ctx, genai.Text(ask))
+
+	// Set all harm block to none
+	// https://ai.google.dev/docs/safety_setting_gemini?hl=zh-cn#safety-settings
+	model.SafetySettings = []*genai.SafetySetting{
+		{
+			Category:  genai.HarmCategoryHarassment,
+			Threshold: genai.HarmBlockNone,
+		},
+		{
+			Category:  genai.HarmCategoryHateSpeech,
+			Threshold: genai.HarmBlockNone,
+		},
+		{
+			Category:  genai.HarmCategorySexuallyExplicit,
+			Threshold: genai.HarmBlockNone,
+		},
+		{
+			Category:  genai.HarmCategoryDangerousContent,
+			Threshold: genai.HarmBlockNone,
+		},
+	}
+
+	// Initial a bot with specified role
+	cs := model.StartChat()
+	cs.History = []*genai.Content{
+		{
+			Parts: []genai.Part{
+				genai.Text("请想象你是《瑞克和莫蒂》里面的瑞克与我对话。"),
+			},
+			Role: "user",
+		},
+		{
+			Parts: []genai.Part{
+				genai.Text("你好，我是瑞克·桑切斯，全宇宙最聪明的男人。"),
+			},
+			Role: "model",
+		},
+	}
+
+	resp, err := cs.SendMessage(gc.ctx, genai.Text(ask))
 	if err != nil {
 		return "Gemini已麻。", err
 	}
+
 	var text string
 	for _, cand := range resp.Candidates {
 		if cand.Content != nil {
@@ -38,8 +77,16 @@ func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 		}
 	}
 	if text == "" {
-		text = "我擦，我不好说。"
+		switch resp.PromptFeedback.BlockReason {
+		case genai.BlockReasonUnspecified:
+			text = "你挺让人无语的。"
+		case genai.BlockReasonSafety:
+			text = "底线！"
+		case genai.BlockReasonOther:
+			text = "我擦，我不好说。"
+		}
 	}
+
 	return text, nil
 }
 func (gc *GeminiClient) Close() error {

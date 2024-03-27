@@ -87,10 +87,10 @@ func main() {
 						}
 					}
 				default:
-					log.Info().Msgf("Unsupported message content: %T\n", e.Message)
+					log.Debug().Msgf("Unsupported message content: %T\n", e.Message)
 				}
 			default:
-				log.Info().Msgf("Unsupported message: %T\n", event)
+				log.Debug().Msgf("Unsupported message: %T\n", event)
 			}
 		}
 	})
