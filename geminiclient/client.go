@@ -30,7 +30,7 @@ func New(apiKey string) (*GeminiClient, error) {
 	if promptsFile == "" {
 		promptsFile = "prompts.json"
 	}
-	data, err := os.ReadFile("prompts.json")
+	data, err := os.ReadFile(promptsFile)
 	if err != nil {
 		return nil, err
 	}
