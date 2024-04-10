@@ -2,7 +2,9 @@ package geminiclient
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/google/generative-ai-go/genai"
 	"google.golang.org/api/option"
@@ -11,15 +13,39 @@ import (
 type GeminiClient struct {
 	ctx    context.Context
 	client *genai.Client
+	cfg    Configuration
+}
+
+type Configuration struct {
+	Prompts []Prompt
+}
+
+type Prompt struct {
+	Text string
+	Role string
 }
 
 func New(apiKey string) (*GeminiClient, error) {
+	promptsFile := os.Getenv("PROMPTS_FILE")
+	if promptsFile == "" {
+		promptsFile = "prompts.json"
+	}
+	data, err := os.ReadFile("prompts.json")
+	if err != nil {
+		return nil, err
+	}
+	var cfg Configuration
+	err = json.Unmarshal(data, &cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
 		return nil, err
 	}
-	return &GeminiClient{ctx, client}, nil
+	return &GeminiClient{ctx, client, cfg}, nil
 }
 
 func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
@@ -48,20 +74,16 @@ func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 
 	// Initial a bot with specified role
 	cs := model.StartChat()
-	cs.History = []*genai.Content{
-		{
+	contents := make([]*genai.Content, 0, 10)
+	for _, prompt := range gc.cfg.Prompts {
+		contents = append(contents, &genai.Content{
 			Parts: []genai.Part{
-				genai.Text("请想象你是《瑞克和莫蒂》里面的瑞克与我对话。"),
+				genai.Text(prompt.Text),
 			},
-			Role: "user",
-		},
-		{
-			Parts: []genai.Part{
-				genai.Text("你好，我是瑞克·桑切斯，全宇宙最聪明的男人。"),
-			},
-			Role: "model",
-		},
+			Role: prompt.Role,
+		})
 	}
+	cs.History = contents
 
 	resp, err := cs.SendMessage(gc.ctx, genai.Text(ask))
 	if err != nil {
@@ -79,16 +101,17 @@ func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 	if text == "" {
 		switch resp.PromptFeedback.BlockReason {
 		case genai.BlockReasonUnspecified:
-			text = "你挺让人无语的。"
+			text = "Blocked with reason unspecified."
 		case genai.BlockReasonSafety:
-			text = "底线！"
+			text = "Blocked with reason safety."
 		case genai.BlockReasonOther:
-			text = "我擦，我不好说。"
+			text = "Blocked with reason other."
 		}
 	}
 
 	return text, nil
 }
+
 func (gc *GeminiClient) Close() error {
 	return gc.client.Close()
 }
