@@ -25,17 +25,10 @@ type Prompt struct {
 	Role string
 }
 
-func New(apiKey string) (*GeminiClient, error) {
-	promptsFile := os.Getenv("PROMPTS_FILE")
-	if promptsFile == "" {
-		promptsFile = "prompts.json"
-	}
-	data, err := os.ReadFile(promptsFile)
-	if err != nil {
-		return nil, err
-	}
+func New(apiKey string, prompts string) (*GeminiClient, error) {
+	promptsStr := os.Getenv(prompts)
 	var cfg Configuration
-	err = json.Unmarshal(data, &cfg)
+	err := json.Unmarshal([]byte(promptsStr), &cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -48,8 +41,8 @@ func New(apiKey string) (*GeminiClient, error) {
 	return &GeminiClient{ctx, client, cfg}, nil
 }
 
-func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
-	model := gc.client.GenerativeModel("gemini-pro")
+func (gc *GeminiClient) Generate(question string) (string, error) {
+	model := gc.client.GenerativeModel("gemini-1.5-flash")
 
 	// Set all harm block to none
 	// https://ai.google.dev/docs/safety_setting_gemini?hl=zh-cn#safety-settings
@@ -85,7 +78,7 @@ func (gc *GeminiClient) SingleQuestion(ask string) (string, error) {
 	}
 	cs.History = contents
 
-	resp, err := cs.SendMessage(gc.ctx, genai.Text(ask))
+	resp, err := cs.SendMessage(gc.ctx, genai.Text(question))
 	if err != nil {
 		return "Gemini已麻。", err
 	}
