@@ -6,7 +6,7 @@ COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 
 COPY . .
-RUN go build -o /bin/app
+RUN go build -C cmd -o /bin/app
 
 FROM ubuntu:latest
 RUN apt-get update

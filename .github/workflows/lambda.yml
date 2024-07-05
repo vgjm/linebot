@@ -1,0 +1,35 @@
+name: Deploy to lambda
+on:
+    push:
+      tags: ['*']
+jobs:
+
+  deploy_zip:
+    name: deploy lambda function
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [1.22]
+    steps:
+      - name: checkout source code
+        uses: actions/checkout@v3
+      - name: Install Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Build binary
+        run: |
+            GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bootstrap -tags lambda.norpc main.go && zip linebotFunction.zip bootstrap
+      - name: default deploy
+        uses: appleboy/lambda-action@v0.2.0
+        with:
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: ${{ secrets.AWS_REGION }}
+          function_name: linebotFunction
+          zip_file: linebotFunction.zip
+          memory_size: 256
+          timeout: 30
+          handler: bootstrap
+          role: ${{ secrets.AWS_LAMBDA_ROLE }}
+          runtime: provided.al2023
