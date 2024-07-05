@@ -2,31 +2,14 @@
 
 This repository contains the source code of a Line chatbot that reply to user messages or group chats with Google Gemini AI.
 
-## Deploy to AWS Lambda
+## Running
 
-Set Environments (Powershell on Windows):
+`main.go` is for AWS Lambda runtime.
 
-```
-$env:GOOS = "linux"
-$env:GOARCH = "arm64"
-$env:CGO_ENABLED = "0"
-```
+`cmd/server.go` is for local runtime.
 
-Build the application
+## Deploying
 
-```
-go build -tags lambda.norpc -o bootstrap main.go
-```
+For deploying to AWS Lambda, please refer to [AWS Documents](https://docs.aws.amazon.com/lambda/latest/dg/golang-package.html).
 
-Archive
-
-```
-~\go\bin\build-lambda-zip.exe -o linebotFunction.zip .\bootstrap
-2024/07/04 23:09:44 wrote linebotFunction.zip
-```
-
-Deploy
-
-```
-aws lambda update-function-code --function-name linebotFunction --zip-file fileb://linebotFunction.zip
-```
+For running with docker, please use `vgjm/linebot` docker image.
