@@ -1,23 +1,25 @@
-// Copyright 2016 LINE Corporation
-//
-// LINE Corporation licenses this file to you under the Apache License,
-// version 2.0 (the "License"); you may not use this file except in compliance
-// with the License. You may obtain a copy of the License at:
-//
-//   http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-// WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-// License for the specific language governing permissions and limitations
-// under the License.
-
 package main
 
 import (
-	"github.com/vgjm/linebot/core"
+	"context"
+	"log"
+	"net/http"
+
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
+	"github.com/vgjm/linebot/linebot"
 )
 
 func main() {
-	core.Start()
+	ctx := context.Background()
+
+	lb, err := linebot.New(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer lb.Close()
+
+	http.HandleFunc("/", lb.Callback)
+
+	lambda.Start(httpadapter.New(http.DefaultServeMux).ProxyWithContext)
 }
