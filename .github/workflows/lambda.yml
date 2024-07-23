@@ -1,7 +1,7 @@
 name: Deploy to lambda
 on:
-    push:
-      tags: ['*']
+  push:
+    branches: ['main']
 jobs:
 
   deploy_zip:
