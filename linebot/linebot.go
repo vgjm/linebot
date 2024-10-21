@@ -126,6 +126,8 @@ func (lb *Linebot) Callback(w http.ResponseWriter, req *http.Request) {
 			slog.Warn("Failed to handle event", "err", err, "event", event)
 		}
 	}
+
+	w.WriteHeader(200)
 }
 
 func (lb *Linebot) handleUserEvent(e webhook.MessageEvent, s webhook.UserSource) error {
