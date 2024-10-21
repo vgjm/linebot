@@ -5,8 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -42,7 +41,7 @@ type Prompt struct {
 }
 
 func New(ctx context.Context) (*Linebot, error) {
-	log.Println("Starting the linebot...")
+	slog.Info("Starting the linebot...")
 	lineChannelSecret := os.Getenv(LineChannelSecretEnv)
 	if lineChannelSecret == "" {
 		return nil, fmt.Errorf("%s is not set", LineChannelSecretEnv)
@@ -99,60 +98,57 @@ func (lb *Linebot) Callback(w http.ResponseWriter, req *http.Request) {
 	cb, err := webhook.ParseRequest(lb.channelSecret, req)
 	if err != nil {
 		if errors.Is(err, webhook.ErrInvalidSignature) {
+			slog.Warn("Received a request with invalid signature", "err", err)
 			w.WriteHeader(400)
 		} else {
+			slog.Warn("Failed to parse the request", "err", err)
 			w.WriteHeader(500)
 		}
 		return
 	}
 
 	for _, event := range cb.Events {
+		var err error = nil
 		switch e := event.(type) {
 		case webhook.MessageEvent:
 			switch s := e.Source.(type) {
 			case webhook.UserSource:
-				lb.handleUserEvent(e, s)
+				err = lb.handleUserEvent(e, s)
 			case webhook.GroupSource:
-				lb.handleGroupEvent(e, s)
+				err = lb.handleGroupEvent(e, s)
 			default:
-				log.Printf("Unknown event source: %v\n", e.Source.GetType())
+				err = fmt.Errorf("unkown event source: %v", e.Source.GetType())
 			}
 		default:
-			log.Printf("Unknown event type: %v\n", event.GetType())
+			err = fmt.Errorf("unkown event type: %v", event.GetType())
+		}
+		if err != nil {
+			slog.Warn("Failed to handle event", "err", err, "event", event)
 		}
 	}
-
-	io.WriteString(w, "OK")
 }
 
-func (lb *Linebot) handleUserEvent(e webhook.MessageEvent, s webhook.UserSource) {
-	log.Printf("User event. UserId: %s\n", s.UserId)
+func (lb *Linebot) handleUserEvent(e webhook.MessageEvent, s webhook.UserSource) error {
+	slog.Info("Handling user event", "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
-		log.Printf("Text: %s\n", m.Text)
-		if err := lb.handleTextMessage(m.Text, e.ReplyToken); err != nil {
-			log.Printf("Failed to hanlde message: %s\n", m.Text)
-			log.Printf("Error: %s\n", err)
-		}
+		return lb.handleTextMessage(m.Text, e.ReplyToken)
 	default:
-		log.Printf("Unknown message type: %v\n", e.Message.GetType())
+		return fmt.Errorf("unkown message type: %v", e.Message.GetType())
 	}
-
 }
 
-func (lb *Linebot) handleGroupEvent(e webhook.MessageEvent, s webhook.GroupSource) {
-	log.Printf("Group event. GroupId: %s, UserId: %s\n", s.GroupId, s.UserId)
+func (lb *Linebot) handleGroupEvent(e webhook.MessageEvent, s webhook.GroupSource) error {
+	slog.Info("Handling group event", "group_id", s.GroupId, "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
-		log.Printf("Text: %s\n", m.Text)
 		if strings.HasPrefix(m.Text, "/") {
-			if err := lb.handleTextMessage(strings.Replace(m.Text, "/", "", 1), e.ReplyToken); err != nil {
-				log.Printf("Failed to hanlde message: %s\n", m.Text)
-				log.Printf("Error: %s\n", err)
-			}
+			return lb.handleTextMessage(strings.Replace(m.Text, "/", "", 1), e.ReplyToken)
+		} else {
+			return nil
 		}
 	default:
-		log.Printf("Unknown message type: %v\n", e.Message.GetType())
+		return fmt.Errorf("unknown message type: %v", e.Message.GetType())
 	}
 }
 
