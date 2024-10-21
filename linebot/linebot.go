@@ -134,6 +134,7 @@ func (lb *Linebot) handleUserEvent(e webhook.MessageEvent, s webhook.UserSource)
 	slog.Info("Handling user event", "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
+		slog.Info("Received text message", "msg", m.Text)
 		return lb.handleTextMessage(m.Text, e.ReplyToken)
 	default:
 		return fmt.Errorf("unkown message type: %v", e.Message.GetType())
@@ -144,6 +145,7 @@ func (lb *Linebot) handleGroupEvent(e webhook.MessageEvent, s webhook.GroupSourc
 	slog.Info("Handling group event", "group_id", s.GroupId, "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
+		slog.Info("Received text message", "msg", m.Text)
 		if strings.HasPrefix(m.Text, "/") {
 			return lb.handleTextMessage(strings.Replace(m.Text, "/", "", 1), e.ReplyToken)
 		} else {
