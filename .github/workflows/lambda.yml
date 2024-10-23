@@ -20,7 +20,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - name: Build binary
         run: |
-            GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bootstrap -tags lambda.norpc main.go && zip linebotFunction.zip bootstrap
+            GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bootstrap -tags lambda.norpc cmd/lambda && zip linebotFunction.zip bootstrap
       - name: default deploy
         uses: appleboy/lambda-action@v0.2.0
         with:
