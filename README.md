@@ -4,9 +4,9 @@ This repository contains the source code of a Line chatbot that reply to user me
 
 ## Running
 
-`main.go` is for AWS Lambda runtime.
+`cmd/lambda/main.go` is for AWS Lambda runtime.
 
-`cmd/server.go` is for local runtime.
+`cmd/server/main.go` is for local runtime.
 
 ## Deploying
 
