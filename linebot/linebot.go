@@ -23,7 +23,17 @@ const (
 	GeminiModel          = "GEMINI_MODEL"
 	PromptsEnv           = "PROMPTS"
 
-	DefaultModel = "gemini-1.5-flash"
+	DefaultModel   = "gemini-1.5-flash"
+	DefaultPrompts = `[
+      {
+        "text": "You are an assistant.",
+        "role": "user"
+      },
+  	  {
+        "text": "What can I do for you?",
+        "role": "model"
+  	  }
+	]`
 )
 
 type Linebot struct {
@@ -60,8 +70,7 @@ func New(ctx context.Context) (*Linebot, error) {
 	}
 	promptsStr := os.Getenv(PromptsEnv)
 	if promptsStr == "" {
-		// TODO Set default prompt
-		return nil, fmt.Errorf("%s is not set", PromptsEnv)
+		promptsStr = DefaultPrompts
 	}
 
 	bot, err := messaging_api.NewMessagingApiAPI(lineChannelToken)
