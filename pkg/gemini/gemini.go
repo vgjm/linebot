@@ -8,8 +8,11 @@ import (
 	"strings"
 
 	"github.com/google/generative-ai-go/genai"
+	"github.com/vgjm/linebot/pkg/llm"
 	"google.golang.org/api/option"
 )
+
+var _ llm.LLM = (*Gemini)(nil)
 
 const (
 	PromptsEnv      = "PROMPTS"
