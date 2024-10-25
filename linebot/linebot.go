@@ -101,7 +101,7 @@ func (lb *Linebot) handleUserEvent(e webhook.MessageEvent, s webhook.UserSource)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
 		slog.Info("Received text message", "original_text", m.Text)
-		return lb.handleTextMessage(m.Text, e.ReplyToken)
+		return lb.handleTextMessage(m.Text, e.ReplyToken, m.QuoteToken)
 	default:
 		return fmt.Errorf("unkown message type: %v", e.Message.GetType())
 	}
@@ -113,7 +113,7 @@ func (lb *Linebot) handleGroupEvent(e webhook.MessageEvent, s webhook.GroupSourc
 	case webhook.TextMessageContent:
 		slog.Info("Received text message", "original_text", m.Text)
 		if strings.HasPrefix(m.Text, "/") {
-			return lb.handleTextMessage(strings.Replace(m.Text, "/", "", 1), e.ReplyToken)
+			return lb.handleTextMessage(strings.Replace(m.Text, "/", "", 1), e.ReplyToken, m.QuoteToken)
 		} else {
 			return nil
 		}
@@ -122,10 +122,10 @@ func (lb *Linebot) handleGroupEvent(e webhook.MessageEvent, s webhook.GroupSourc
 	}
 }
 
-func (lb *Linebot) handleTextMessage(question string, replyToken string) error {
+func (lb *Linebot) handleTextMessage(question string, replyToken string, quoteToken string) error {
 	resp, err := lb.ai.GenerateResponse(question)
 	if resp != "" {
-		if err := lb.replyMessage(replyToken, resp); err != nil {
+		if err := lb.replyMessage(resp, replyToken, quoteToken); err != nil {
 			return fmt.Errorf("failed to reply message: %w", err)
 		}
 	}
@@ -137,13 +137,14 @@ func (lb *Linebot) handleTextMessage(question string, replyToken string) error {
 	return nil
 }
 
-func (lb *Linebot) replyMessage(replyToken, text string) error {
+func (lb *Linebot) replyMessage(text, replyToken, quoteToken string) error {
 	_, err := lb.bot.ReplyMessage(
 		&messaging_api.ReplyMessageRequest{
 			ReplyToken: replyToken,
 			Messages: []messaging_api.MessageInterface{
 				messaging_api.TextMessage{
-					Text: text,
+					Text:       text,
+					QuoteToken: quoteToken,
 				},
 			},
 		},
