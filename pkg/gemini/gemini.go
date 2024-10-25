@@ -121,8 +121,8 @@ func (g *Gemini) GenerateResponse(question string) (string, error) {
 			}
 		}
 	}
-	text = strings.ReplaceAll(text, "**", " ")
 	text = strings.TrimSpace(text)
+	text = strings.ReplaceAll(text, "**", " ")
 	if text == "" {
 		switch resp.PromptFeedback.BlockReason {
 		case genai.BlockReasonUnspecified:

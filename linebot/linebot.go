@@ -130,7 +130,6 @@ func (lb *Linebot) handleTextMessage(question string, replyToken string, quoteTo
 		}
 	}
 	if err != nil {
-
 		return fmt.Errorf("failed to generate response: %w", err)
 	}
 
