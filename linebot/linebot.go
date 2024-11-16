@@ -89,7 +89,7 @@ func (lb *Linebot) Callback(w http.ResponseWriter, req *http.Request) {
 			err = fmt.Errorf("unkown event type: %v", event.GetType())
 		}
 		if err != nil {
-			slog.Warn("Failed to handle event", "err", err)
+			slog.Error("Failed to handle event", "err", err)
 		}
 	}
 
