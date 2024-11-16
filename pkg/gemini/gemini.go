@@ -81,7 +81,7 @@ func New(ctx context.Context) (*Gemini, error) {
 	}, nil
 }
 
-func (g *Gemini) GenerateResponse(question string) (string, error) {
+func (g *Gemini) GenerateResponse(ctx context.Context, question string) (string, error) {
 	model := g.client.GenerativeModel(g.model)
 
 	// Set all harm block to none
@@ -108,7 +108,7 @@ func (g *Gemini) GenerateResponse(question string) (string, error) {
 	cs := model.StartChat()
 	cs.History = g.history
 
-	resp, err := cs.SendMessage(g.ctx, genai.Text(question))
+	resp, err := cs.SendMessage(ctx, genai.Text(question))
 	if err != nil {
 		return "Something went wrong when generating response.", err
 	}

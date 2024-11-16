@@ -1,6 +1,8 @@
 package llm
 
+import "context"
+
 type LLM interface {
-	GenerateResponse(string) (string, error)
+	GenerateResponse(context.Context, string) (string, error)
 	Close() error
 }

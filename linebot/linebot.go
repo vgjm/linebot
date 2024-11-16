@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/line/line-bot-sdk-go/v8/linebot/messaging_api"
 	"github.com/line/line-bot-sdk-go/v8/linebot/webhook"
@@ -61,6 +62,9 @@ func (lb *Linebot) Close() error {
 }
 
 func (lb *Linebot) Callback(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithTimeout(req.Context(), time.Second*27)
+	defer cancel()
+
 	cb, err := webhook.ParseRequest(lb.channelSecret, req)
 	if err != nil {
 		if errors.Is(err, webhook.ErrInvalidSignature) {
@@ -79,9 +83,9 @@ func (lb *Linebot) Callback(w http.ResponseWriter, req *http.Request) {
 		case webhook.MessageEvent:
 			switch s := e.Source.(type) {
 			case webhook.UserSource:
-				err = lb.handleUserEvent(e, s)
+				err = lb.handleUserEvent(ctx, e, s)
 			case webhook.GroupSource:
-				err = lb.handleGroupEvent(e, s)
+				err = lb.handleGroupEvent(ctx, e, s)
 			default:
 				err = fmt.Errorf("unkown event source: %v", e.Source.GetType())
 			}
@@ -96,24 +100,24 @@ func (lb *Linebot) Callback(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(200)
 }
 
-func (lb *Linebot) handleUserEvent(e webhook.MessageEvent, s webhook.UserSource) error {
+func (lb *Linebot) handleUserEvent(ctx context.Context, e webhook.MessageEvent, s webhook.UserSource) error {
 	slog.Info("Handling user event", "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
 		slog.Info("Received text message", "original_text", m.Text)
-		return lb.handleTextMessage(m.Text, e.ReplyToken, m.QuoteToken)
+		return lb.handleTextMessage(ctx, m.Text, e.ReplyToken, m.QuoteToken)
 	default:
 		return fmt.Errorf("unkown message type: %v", e.Message.GetType())
 	}
 }
 
-func (lb *Linebot) handleGroupEvent(e webhook.MessageEvent, s webhook.GroupSource) error {
+func (lb *Linebot) handleGroupEvent(ctx context.Context, e webhook.MessageEvent, s webhook.GroupSource) error {
 	slog.Info("Handling group event", "group_id", s.GroupId, "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
 		slog.Info("Received text message", "original_text", m.Text)
 		if strings.HasPrefix(m.Text, "/") {
-			return lb.handleTextMessage(strings.Replace(m.Text, "/", "", 1), e.ReplyToken, m.QuoteToken)
+			return lb.handleTextMessage(ctx, strings.Replace(m.Text, "/", "", 1), e.ReplyToken, m.QuoteToken)
 		} else {
 			return nil
 		}
@@ -122,8 +126,8 @@ func (lb *Linebot) handleGroupEvent(e webhook.MessageEvent, s webhook.GroupSourc
 	}
 }
 
-func (lb *Linebot) handleTextMessage(question string, replyToken string, quoteToken string) error {
-	resp, err := lb.ai.GenerateResponse(question)
+func (lb *Linebot) handleTextMessage(ctx context.Context, question string, replyToken string, quoteToken string) error {
+	resp, err := lb.ai.GenerateResponse(ctx, question)
 	if resp != "" {
 		if err := lb.replyMessage(resp, replyToken, quoteToken); err != nil {
 			return fmt.Errorf("failed to reply message: %w", err)
