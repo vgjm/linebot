@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/vgjm/linebot/linebot"
+	"github.com/vgjm/linebot/internal/linebot"
 )
 
 func main() {
