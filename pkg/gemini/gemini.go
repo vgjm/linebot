@@ -110,7 +110,7 @@ func (g *Gemini) GenerateResponse(ctx context.Context, question string) (string,
 
 	resp, err := cs.SendMessage(ctx, genai.Text(question))
 	if err != nil {
-		return "Something went wrong when generating response.", err
+		return "", err
 	}
 
 	var text string
@@ -122,17 +122,7 @@ func (g *Gemini) GenerateResponse(ctx context.Context, question string) (string,
 		}
 	}
 	text = strings.TrimSpace(text)
-	text = strings.ReplaceAll(text, "**", " ")
-	if text == "" {
-		switch resp.PromptFeedback.BlockReason {
-		case genai.BlockReasonUnspecified:
-			text = "Blocked with reason unspecified."
-		case genai.BlockReasonSafety:
-			text = "Blocked with reason safety."
-		case genai.BlockReasonOther:
-			text = "Blocked with reason other."
-		}
-	}
+	text = strings.ReplaceAll(text, "**", " ") // looks better
 
 	return text, nil
 }

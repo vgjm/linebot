@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/line/line-bot-sdk-go/v8/linebot/messaging_api"
@@ -62,82 +63,110 @@ func (lb *Linebot) Close() error {
 }
 
 func (lb *Linebot) Callback(w http.ResponseWriter, req *http.Request) {
-	ctx, cancel := context.WithTimeout(req.Context(), time.Second*27)
+	ctx, cancel := context.WithTimeout(req.Context(), time.Minute) // Max to 1min
 	defer cancel()
 
 	cb, err := webhook.ParseRequest(lb.channelSecret, req)
 	if err != nil {
 		if errors.Is(err, webhook.ErrInvalidSignature) {
-			slog.Warn("Received a request with invalid signature", "err", err)
+			slog.Warn("Received a request with invalid signature", "error", err)
 			w.WriteHeader(400)
 		} else {
-			slog.Warn("Failed to parse the request", "err", err)
+			slog.Warn("Failed to parse the request", "error", err)
 			w.WriteHeader(500)
 		}
 		return
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(len(cb.Events))
 	for _, event := range cb.Events {
-		var err error = nil
-		switch e := event.(type) {
-		case webhook.MessageEvent:
-			switch s := e.Source.(type) {
-			case webhook.UserSource:
-				err = lb.handleUserEvent(ctx, e, s)
-			case webhook.GroupSource:
-				err = lb.handleGroupEvent(ctx, e, s)
+		go func() {
+			defer wg.Done()
+			switch e := event.(type) {
+			case webhook.MessageEvent:
+				switch s := e.Source.(type) {
+				case webhook.UserSource:
+					lb.handleUserEvent(ctx, e, s)
+				case webhook.GroupSource:
+					lb.handleGroupEvent(ctx, e, s)
+				default:
+					slog.Error("Unknown event source", "event_source", e.Source.GetType())
+				}
 			default:
-				err = fmt.Errorf("unkown event source: %v", e.Source.GetType())
+				slog.Error("Unknown event type", "event_type", event.GetType())
 			}
-		default:
-			err = fmt.Errorf("unkown event type: %v", event.GetType())
-		}
-		if err != nil {
-			slog.Error("Failed to handle event", "err", err)
-		}
+		}()
 	}
 
-	w.WriteHeader(200)
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	deadline, _ := ctx.Deadline()
+	deadline = deadline.Add(-100 * time.Millisecond) // Exit 100ms before deadline
+	timeoutChannel := time.After(time.Until(deadline))
+	select {
+	case <-c:
+		w.WriteHeader(200)
+	case <-timeoutChannel:
+		w.WriteHeader(408) //Timeout
+	}
 }
 
-func (lb *Linebot) handleUserEvent(ctx context.Context, e webhook.MessageEvent, s webhook.UserSource) error {
+func (lb *Linebot) handleUserEvent(ctx context.Context, e webhook.MessageEvent, s webhook.UserSource) {
 	slog.Info("Handling user event", "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
 		slog.Info("Received text message", "original_text", m.Text)
-		return lb.handleTextMessage(ctx, m.Text, e.ReplyToken, m.QuoteToken)
+		lb.handleTextMessage(ctx, m.Text, e.ReplyToken, m.QuoteToken)
 	default:
-		return fmt.Errorf("unkown message type: %v", e.Message.GetType())
+		slog.Error("Unknown message type", "message_type", e.Message.GetType())
 	}
 }
 
-func (lb *Linebot) handleGroupEvent(ctx context.Context, e webhook.MessageEvent, s webhook.GroupSource) error {
+func (lb *Linebot) handleGroupEvent(ctx context.Context, e webhook.MessageEvent, s webhook.GroupSource) {
 	slog.Info("Handling group event", "group_id", s.GroupId, "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
 		slog.Info("Received text message", "original_text", m.Text)
 		if strings.HasPrefix(m.Text, "/") {
-			return lb.handleTextMessage(ctx, strings.Replace(m.Text, "/", "", 1), e.ReplyToken, m.QuoteToken)
-		} else {
-			return nil
+			lb.handleTextMessage(ctx, strings.Replace(m.Text, "/", "", 1), e.ReplyToken, m.QuoteToken)
 		}
 	default:
-		return fmt.Errorf("unknown message type: %v", e.Message.GetType())
+		slog.Error("Unknown message type", "message_type", e.Message.GetType())
 	}
 }
 
-func (lb *Linebot) handleTextMessage(ctx context.Context, question string, replyToken string, quoteToken string) error {
-	resp, err := lb.ai.GenerateResponse(ctx, question)
-	if resp != "" {
-		if err := lb.replyMessage(resp, replyToken, quoteToken); err != nil {
-			return fmt.Errorf("failed to reply message: %w", err)
+func (lb *Linebot) handleTextMessage(ctx context.Context, question string, replyToken string, quoteToken string) {
+
+	respChannel := make(chan string)
+	go func() {
+		resp, err := lb.ai.GenerateResponse(ctx, question)
+		if err != nil {
+			slog.Error("Failed to generate response", "error", err)
+			resp = "Something went wrong when generating response"
+		}
+		respChannel <- resp
+	}()
+
+	deadline, _ := ctx.Deadline()
+	deadline = deadline.Add(-500 * time.Millisecond)
+	timeoutChannel := time.After(time.Until(deadline))
+
+	select {
+	case resp := <-respChannel:
+		if resp != "" {
+			if err := lb.replyMessage(resp, replyToken, quoteToken); err != nil {
+				slog.Error("Failed to reply message", "error", err)
+			}
+		}
+	case <-timeoutChannel:
+		if err := lb.replyMessage("Timeout when generating response", replyToken, quoteToken); err != nil {
+			slog.Error("Failed to reply message", "error", err)
 		}
 	}
-	if err != nil {
-		return fmt.Errorf("failed to generate response: %w", err)
-	}
-
-	return nil
 }
 
 func (lb *Linebot) replyMessage(text, replyToken, quoteToken string) error {
