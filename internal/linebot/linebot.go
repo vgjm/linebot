@@ -109,10 +109,12 @@ func (lb *Linebot) Callback(w http.ResponseWriter, req *http.Request) {
 	timeoutChannel := time.After(time.Until(deadline))
 	select {
 	case <-c:
-		w.WriteHeader(200)
+		slog.Info("Request is handled properly")
 	case <-timeoutChannel:
-		w.WriteHeader(408) //Timeout
+		slog.Error("Request timeout")
 	}
+	
+	w.WriteHeader(200)
 }
 
 func (lb *Linebot) handleUserEvent(ctx context.Context, e webhook.MessageEvent, s webhook.UserSource) {
@@ -152,7 +154,7 @@ func (lb *Linebot) handleTextMessage(ctx context.Context, question string, reply
 	}()
 
 	deadline, _ := ctx.Deadline()
-	deadline = deadline.Add(-500 * time.Millisecond)
+	deadline = deadline.Add(-1 * time.Second) // leave some time to inform users
 	timeoutChannel := time.After(time.Until(deadline))
 
 	select {
