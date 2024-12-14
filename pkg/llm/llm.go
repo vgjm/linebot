@@ -3,6 +3,6 @@ package llm
 import "context"
 
 type LLM interface {
-	GenerateResponse(context.Context, string) (string, error)
+	GenerateContent(ctx context.Context, instruction string, question string) (string, error)
 	Close() error
 }

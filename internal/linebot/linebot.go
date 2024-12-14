@@ -6,63 +6,59 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/line/line-bot-sdk-go/v8/linebot/messaging_api"
 	"github.com/line/line-bot-sdk-go/v8/linebot/webhook"
+	"github.com/vgjm/linebot/internal/envs"
+	"github.com/vgjm/linebot/internal/storage"
 	"github.com/vgjm/linebot/pkg/gemini"
 	"github.com/vgjm/linebot/pkg/llm"
 )
 
-const (
-	LineChannelSecretEnv = "LINE_CHANNEL_SECRET"
-	LineChannelTokenEnv  = "LINE_CHANNEL_TOKEN"
-)
-
-type Linebot struct {
+type LineBot struct {
 	ctx           context.Context
 	channelSecret string
-	bot           *messaging_api.MessagingApiAPI
-	ai            llm.LLM
+	messagingAPI  *messaging_api.MessagingApiAPI
+	llmProvider   llm.LLM
+	storage       storage.Storage
 }
 
-func New(ctx context.Context) (*Linebot, error) {
-	slog.Info("Starting the linebot...")
-	lineChannelSecret := os.Getenv(LineChannelSecretEnv)
-	if lineChannelSecret == "" {
-		return nil, fmt.Errorf("%s is not set", LineChannelSecretEnv)
-	}
-	lineChannelToken := os.Getenv(LineChannelTokenEnv)
-	if lineChannelToken == "" {
-		return nil, fmt.Errorf("%s is not set", LineChannelTokenEnv)
-	}
+type LineBotConfig struct {
+	Storage       storage.Storage
+	ChannelSecret string
+	ChannelToken  string
+}
 
-	bot, err := messaging_api.NewMessagingApiAPI(lineChannelToken)
+func New(ctx context.Context, cfg *LineBotConfig) (*LineBot, error) {
+	slog.Info("Starting the linebot...")
+
+	messagingAPI, err := messaging_api.NewMessagingApiAPI(cfg.ChannelToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create line bot client: %w", err)
 	}
 
-	ai, err := gemini.New(ctx)
+	llmProvider, err := gemini.New(ctx, envs.GeminiApiKey, envs.GeminiModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize llm client: %w", err)
 	}
 
-	return &Linebot{
+	return &LineBot{
 		ctx:           ctx,
-		channelSecret: lineChannelSecret,
-		bot:           bot,
-		ai:            ai,
+		channelSecret: cfg.ChannelSecret,
+		messagingAPI:  messagingAPI,
+		llmProvider:   llmProvider,
+		storage:       cfg.Storage,
 	}, nil
 }
 
-func (lb *Linebot) Close() error {
-	return lb.ai.Close()
+func (lb *LineBot) Close() error {
+	return lb.llmProvider.Close()
 }
 
-func (lb *Linebot) Callback(w http.ResponseWriter, req *http.Request) {
+func (lb *LineBot) Callback(w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithTimeout(req.Context(), time.Minute) // Max to 1min
 	defer cancel()
 
@@ -113,39 +109,48 @@ func (lb *Linebot) Callback(w http.ResponseWriter, req *http.Request) {
 	case <-timeoutChannel:
 		slog.Error("Request timeout")
 	}
-	
+
 	w.WriteHeader(200)
 }
 
-func (lb *Linebot) handleUserEvent(ctx context.Context, e webhook.MessageEvent, s webhook.UserSource) {
+func (lb *LineBot) handleUserEvent(ctx context.Context, e webhook.MessageEvent, s webhook.UserSource) {
 	slog.Info("Handling user event", "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
 		slog.Info("Received text message", "original_text", m.Text)
-		lb.handleTextMessage(ctx, m.Text, e.ReplyToken, m.QuoteToken)
+		setting, err := lb.storage.GetUserSetting(ctx, s.UserId)
+		if err != nil {
+			slog.Error("Failed to get user setting", "user_id", s.UserId)
+		}
+		lb.handleTextMessage(ctx, setting.SystemInstruction, m.Text, e.ReplyToken, m.QuoteToken)
 	default:
 		slog.Error("Unknown message type", "message_type", e.Message.GetType())
 	}
 }
 
-func (lb *Linebot) handleGroupEvent(ctx context.Context, e webhook.MessageEvent, s webhook.GroupSource) {
+func (lb *LineBot) handleGroupEvent(ctx context.Context, e webhook.MessageEvent, s webhook.GroupSource) {
 	slog.Info("Handling group event", "group_id", s.GroupId, "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
 		slog.Info("Received text message", "original_text", m.Text)
 		if strings.HasPrefix(m.Text, "/") {
-			lb.handleTextMessage(ctx, strings.Replace(m.Text, "/", "", 1), e.ReplyToken, m.QuoteToken)
+			setting, err := lb.storage.GetGroupUserSetting(ctx, s.GroupId, s.UserId)
+			if err != nil {
+				slog.Error("Failed to get group user setting", "group_id", s.GroupId, "user_id", s.UserId)
+			}
+			lb.handleTextMessage(ctx, setting.SystemInstruction, strings.Replace(m.Text, "/", "", 1), e.ReplyToken, m.QuoteToken)
 		}
 	default:
 		slog.Error("Unknown message type", "message_type", e.Message.GetType())
 	}
 }
 
-func (lb *Linebot) handleTextMessage(ctx context.Context, question string, replyToken string, quoteToken string) {
+func (lb *LineBot) handleTextMessage(ctx context.Context, instruction, question,
+	replyToken, quoteToken string) {
 
 	respChannel := make(chan string)
 	go func() {
-		resp, err := lb.ai.GenerateResponse(ctx, question)
+		resp, err := lb.llmProvider.GenerateContent(ctx, instruction, question)
 		if err != nil {
 			slog.Error("Failed to generate response", "error", err)
 			resp = "Something went wrong when generating response"
@@ -171,8 +176,8 @@ func (lb *Linebot) handleTextMessage(ctx context.Context, question string, reply
 	}
 }
 
-func (lb *Linebot) replyMessage(text, replyToken, quoteToken string) error {
-	_, err := lb.bot.ReplyMessage(
+func (lb *LineBot) replyMessage(text, replyToken, quoteToken string) error {
+	_, err := lb.messagingAPI.ReplyMessage(
 		&messaging_api.ReplyMessageRequest{
 			ReplyToken: replyToken,
 			Messages: []messaging_api.MessageInterface{

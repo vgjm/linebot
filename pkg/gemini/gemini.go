@@ -2,9 +2,7 @@ package gemini
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/google/generative-ai-go/genai"
@@ -14,74 +12,31 @@ import (
 
 var _ llm.LLM = (*Gemini)(nil)
 
-const (
-	PromptsEnv      = "PROMPTS"
-	GeminiModel     = "GEMINI_MODEL"
-	GeminiApiKeyEnv = "GEMINI_API_KEY"
-
-	DefaultModel   = "gemini-1.5-flash"
-	DefaultPrompts = `[
-      {
-        "text": "You are an assistant.",
-        "role": "user"
-      },
-  	  {
-        "text": "What can I do for you?",
-        "role": "model"
-  	  }
-	]`
-)
+const DefaultModel = "gemini-1.5-flash"
 
 type Gemini struct {
-	ctx     context.Context
-	client  *genai.Client
-	model   string
-	history []*genai.Content
+	ctx    context.Context
+	client *genai.Client
+	model  string
 }
 
-func New(ctx context.Context) (*Gemini, error) {
-	model := os.Getenv(GeminiModel)
+func New(ctx context.Context, apiKey string, model string) (*Gemini, error) {
 	if model == "" {
 		model = DefaultModel
 	}
-
-	promptsStr := os.Getenv(PromptsEnv)
-	if promptsStr == "" {
-		promptsStr = DefaultPrompts
-	}
-	var prompts []prompt
-	err := json.Unmarshal([]byte(promptsStr), &prompts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse prompts: %w", err)
-	}
-	history := make([]*genai.Content, 0, 10)
-	for _, p := range prompts {
-		history = append(history, &genai.Content{
-			Role: p.Role,
-			Parts: []genai.Part{
-				genai.Text(p.Text),
-			},
-		})
-	}
-
-	geminiApiKey := os.Getenv(GeminiApiKeyEnv)
-	if geminiApiKey == "" {
-		return nil, fmt.Errorf("%s is not set", GeminiApiKeyEnv)
-	}
-	client, err := genai.NewClient(ctx, option.WithAPIKey(geminiApiKey))
+	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gemini client: %w", err)
 	}
 
 	return &Gemini{
-		ctx:     ctx,
-		client:  client,
-		model:   model,
-		history: history,
+		ctx:    ctx,
+		client: client,
+		model:  model,
 	}, nil
 }
 
-func (g *Gemini) GenerateResponse(ctx context.Context, question string) (string, error) {
+func (g *Gemini) GenerateContent(ctx context.Context, instruction, question string) (string, error) {
 	model := g.client.GenerativeModel(g.model)
 
 	// Set all harm block to none
@@ -105,10 +60,11 @@ func (g *Gemini) GenerateResponse(ctx context.Context, question string) (string,
 		},
 	}
 
-	cs := model.StartChat()
-	cs.History = g.history
+	if instruction != "" {
+		model.SystemInstruction = genai.NewUserContent(genai.Text(instruction))
+	}
 
-	resp, err := cs.SendMessage(ctx, genai.Text(question))
+	resp, err := model.GenerateContent(ctx, genai.Text(question))
 	if err != nil {
 		return "", err
 	}
@@ -129,9 +85,4 @@ func (g *Gemini) GenerateResponse(ctx context.Context, question string) (string,
 
 func (g *Gemini) Close() error {
 	return g.client.Close()
-}
-
-type prompt struct {
-	Role string
-	Text string
 }
