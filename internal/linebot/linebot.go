@@ -122,7 +122,7 @@ func (lb *LineBot) handleUserEvent(ctx context.Context, e webhook.MessageEvent, 
 		if err != nil {
 			slog.Error("Failed to get user setting", "user_id", s.UserId)
 		}
-		lb.handleTextMessage(ctx, setting.SystemInstruction, m.Text, e.ReplyToken, m.QuoteToken)
+		lb.generateContent(ctx, setting.SystemInstruction, m.Text, e.ReplyToken, m.QuoteToken)
 	default:
 		slog.Error("Unknown message type", "message_type", e.Message.GetType())
 	}
@@ -138,14 +138,14 @@ func (lb *LineBot) handleGroupEvent(ctx context.Context, e webhook.MessageEvent,
 			if err != nil {
 				slog.Error("Failed to get group user setting", "group_id", s.GroupId, "user_id", s.UserId)
 			}
-			lb.handleTextMessage(ctx, setting.SystemInstruction, strings.Replace(m.Text, "/", "", 1), e.ReplyToken, m.QuoteToken)
+			lb.generateContent(ctx, setting.SystemInstruction, strings.Replace(m.Text, "/", "", 1), e.ReplyToken, m.QuoteToken)
 		}
 	default:
 		slog.Error("Unknown message type", "message_type", e.Message.GetType())
 	}
 }
 
-func (lb *LineBot) handleTextMessage(ctx context.Context, instruction, question,
+func (lb *LineBot) generateContent(ctx context.Context, instruction, question,
 	replyToken, quoteToken string) {
 
 	respChannel := make(chan string)
