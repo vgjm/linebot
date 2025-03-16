@@ -83,20 +83,24 @@ func (lb *LineBot) handleInstruction(ctx context.Context, meta TextMessageMeta) 
 			switch tokens[0] {
 			case "set":
 				switch tokens[1] {
-				case "instruct":
-					instruct := strings.Replace(meta.Text, "set instruct ", "", 1)
+				case "instruction":
+					instruct := strings.Replace(meta.Text, "set instruction ", "", 1)
 					if err := lb.SetInstruct(ctx, meta, instruct); err != nil {
-						slog.Error("Failed to set instruct", "user_id", meta.UserId, "group_id", meta.GroupId, "instruct", instruct)
+						slog.Error("Failed to set instruction", "user_id", meta.UserId, "group_id", meta.GroupId, "instruction", instruct)
+					} else {
+						if err := lb.replyMessage("instruction updated", meta.ReplyToken, meta.QuoteToken); err != nil {
+							slog.Error("Failed to reply message", "error", err)
+						}
 					}
 					return true
 				}
 			case "get":
 				switch tokens[1] {
-				case "instruct":
+				case "instruction":
 					reply, err := lb.GetInstruct(ctx, meta, false)
 					if err != nil {
 						slog.Error("Failed to get instruction", "user_id", meta.UserId, "group_id", meta.GroupId)
-						reply = "Something went wrong when fetching your instruct"
+						reply = "Something went wrong when fetching your instruction"
 					}
 					if err := lb.replyMessage(reply, meta.ReplyToken, meta.QuoteToken); err != nil {
 						slog.Error("Failed to reply message", "error", err)
