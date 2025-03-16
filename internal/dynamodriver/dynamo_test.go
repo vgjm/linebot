@@ -8,13 +8,13 @@ import (
 )
 
 func TestDynamoDriver(t *testing.T) {
-	driver, err := New(context.TODO())
+	driver, err := New(context.TODO(), Config{EndPoint: "http://localhost:8000"})
 	if err != nil {
 		t.Fatalf("failed to initialize dynamo driver client: %v\n", err)
 	}
 
 	ctx := context.TODO()
-	instruct := ""
+	instruct := "some instruct"
 	testGroupId := "test"
 	testUserId := "test"
 	if err := driver.UpsertGroupUserSetting(ctx, storage.GroupUserSetting{

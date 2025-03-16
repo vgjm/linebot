@@ -20,11 +20,20 @@ type DynamoDriver struct {
 	client *dynamodb.Client
 }
 
-func New(ctx context.Context) (*DynamoDriver, error) {
+type Config struct {
+	EndPoint string
+}
+
+func New(ctx context.Context, dConfig Config) (*DynamoDriver, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	if dConfig.EndPoint != "" {
+		cfg.BaseEndpoint = aws.String(dConfig.EndPoint)
+	}
+
 	client := dynamodb.NewFromConfig(cfg)
 
 	driver := &DynamoDriver{client}

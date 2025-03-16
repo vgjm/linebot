@@ -15,7 +15,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	storageDriver, err := dynamodriver.New(ctx)
+	storageDriver, err := dynamodriver.New(ctx, dynamodriver.Config{})
 	if err != nil {
 		log.Fatalf("Failed to create dynamodb client: %v\n", err)
 	}

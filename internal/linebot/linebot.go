@@ -117,12 +117,13 @@ func (lb *LineBot) handleUserEvent(ctx context.Context, e webhook.MessageEvent, 
 	slog.Info("Handling user event", "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
-		slog.Info("Received text message", "original_text", m.Text)
-		setting, err := lb.storage.GetUserSetting(ctx, s.UserId)
-		if err != nil {
-			slog.Error("Failed to get user setting", "user_id", s.UserId)
-		}
-		lb.generateContent(ctx, setting.SystemInstruction, m.Text, e.ReplyToken, m.QuoteToken)
+		lb.handleTextMessage(ctx, TextMessageMeta{
+			Type:       UserSource,
+			UserId:     s.UserId,
+			Text:       m.Text,
+			ReplyToken: e.ReplyToken,
+			QuoteToken: m.QuoteToken,
+		})
 	default:
 		slog.Error("Unknown message type", "message_type", e.Message.GetType())
 	}
@@ -134,60 +135,16 @@ func (lb *LineBot) handleGroupEvent(ctx context.Context, e webhook.MessageEvent,
 	case webhook.TextMessageContent:
 		slog.Info("Received text message", "original_text", m.Text)
 		if strings.HasPrefix(m.Text, "/") {
-			setting, err := lb.storage.GetGroupUserSetting(ctx, s.GroupId, s.UserId)
-			if err != nil {
-				slog.Error("Failed to get group user setting", "group_id", s.GroupId, "user_id", s.UserId)
-			}
-			lb.generateContent(ctx, setting.SystemInstruction, strings.Replace(m.Text, "/", "", 1), e.ReplyToken, m.QuoteToken)
+			lb.handleTextMessage(ctx, TextMessageMeta{
+				Type:       GroupSource,
+				UserId:     s.UserId,
+				GroupId:    s.GroupId,
+				Text:       strings.Replace(m.Text, "/", "", 1),
+				ReplyToken: e.ReplyToken,
+				QuoteToken: m.QuoteToken,
+			})
 		}
 	default:
 		slog.Error("Unknown message type", "message_type", e.Message.GetType())
 	}
-}
-
-func (lb *LineBot) generateContent(ctx context.Context, instruction, question,
-	replyToken, quoteToken string) {
-
-	respChannel := make(chan string)
-	go func() {
-		resp, err := lb.llmProvider.GenerateContent(ctx, instruction, question)
-		if err != nil {
-			slog.Error("Failed to generate response", "error", err)
-			resp = "Something went wrong when generating response"
-		}
-		respChannel <- resp
-	}()
-
-	deadline, _ := ctx.Deadline()
-	deadline = deadline.Add(-1 * time.Second) // leave some time to inform users
-	timeoutChannel := time.After(time.Until(deadline))
-
-	select {
-	case resp := <-respChannel:
-		if resp != "" {
-			if err := lb.replyMessage(resp, replyToken, quoteToken); err != nil {
-				slog.Error("Failed to reply message", "error", err)
-			}
-		}
-	case <-timeoutChannel:
-		if err := lb.replyMessage("Timeout when generating response", replyToken, quoteToken); err != nil {
-			slog.Error("Failed to reply message", "error", err)
-		}
-	}
-}
-
-func (lb *LineBot) replyMessage(text, replyToken, quoteToken string) error {
-	_, err := lb.messagingAPI.ReplyMessage(
-		&messaging_api.ReplyMessageRequest{
-			ReplyToken: replyToken,
-			Messages: []messaging_api.MessageInterface{
-				messaging_api.TextMessage{
-					Text:       text,
-					QuoteToken: quoteToken,
-				},
-			},
-		},
-	)
-
-	return err
 }
