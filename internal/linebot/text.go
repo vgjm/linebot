@@ -17,6 +17,10 @@ const (
 	GroupSource
 )
 
+const (
+	DefaultKey = "default"
+)
+
 type TextMessageMeta struct {
 	Type       MessageSource
 	UserId     string
@@ -26,7 +30,7 @@ type TextMessageMeta struct {
 	QuoteToken string
 }
 
-func (lb *LineBot) GetInstruct(ctx context.Context, meta TextMessageMeta, groupDefault bool) (string, error) {
+func (lb *LineBot) GetInstruction(ctx context.Context, meta TextMessageMeta, groupDefault bool) (string, error) {
 	var instruct string
 	switch meta.Type {
 	case UserSource:
@@ -41,7 +45,7 @@ func (lb *LineBot) GetInstruct(ctx context.Context, meta TextMessageMeta, groupD
 			return "", err
 		}
 		if groupDefault && setting.SystemInstruction == "" {
-			setting, err = lb.storage.GetGroupUserSetting(ctx, meta.GroupId, "default")
+			setting, err = lb.storage.GetGroupUserSetting(ctx, meta.GroupId, DefaultKey)
 			if err != nil {
 				return "", err
 			}
@@ -51,7 +55,7 @@ func (lb *LineBot) GetInstruct(ctx context.Context, meta TextMessageMeta, groupD
 	return instruct, nil
 }
 
-func (lb *LineBot) SetInstruct(ctx context.Context, meta TextMessageMeta, instruct string) error {
+func (lb *LineBot) SetInstruction(ctx context.Context, meta TextMessageMeta, instruct string, groupDefault bool) error {
 	var err error
 	switch meta.Type {
 	case UserSource:
@@ -60,9 +64,13 @@ func (lb *LineBot) SetInstruct(ctx context.Context, meta TextMessageMeta, instru
 			SystemInstruction: instruct,
 		})
 	case GroupSource:
+		sourtKey := meta.UserId
+		if groupDefault {
+			sourtKey = DefaultKey
+		}
 		err = lb.storage.UpsertGroupUserSetting(ctx, storage.GroupUserSetting{
 			GroupId:           meta.GroupId,
-			UserId:            meta.UserId,
+			UserId:            sourtKey,
 			SystemInstruction: instruct,
 		})
 	}
@@ -83,9 +91,23 @@ func (lb *LineBot) handleInstruction(ctx context.Context, meta TextMessageMeta) 
 			switch tokens[0] {
 			case "set":
 				switch tokens[1] {
+				case "default":
+					if len(tokens) >= 3 {
+						switch tokens[2] {
+						case "instruction":
+							instruct := strings.Replace(meta.Text, "set default instruction ", "", 1)
+							if err := lb.SetInstruction(ctx, meta, instruct, true); err != nil {
+								slog.Error("Failed to set instruction", "user_id", meta.UserId, "group_id", meta.GroupId, "instruction", instruct)
+							} else {
+								if err := lb.replyMessage("default instruction updated", meta.ReplyToken, meta.QuoteToken); err != nil {
+									slog.Error("Failed to reply message", "error", err)
+								}
+							}
+						}
+					}
 				case "instruction":
 					instruct := strings.Replace(meta.Text, "set instruction ", "", 1)
-					if err := lb.SetInstruct(ctx, meta, instruct); err != nil {
+					if err := lb.SetInstruction(ctx, meta, instruct, false); err != nil {
 						slog.Error("Failed to set instruction", "user_id", meta.UserId, "group_id", meta.GroupId, "instruction", instruct)
 					} else {
 						if err := lb.replyMessage("instruction updated", meta.ReplyToken, meta.QuoteToken); err != nil {
@@ -97,7 +119,7 @@ func (lb *LineBot) handleInstruction(ctx context.Context, meta TextMessageMeta) 
 			case "get":
 				switch tokens[1] {
 				case "instruction":
-					reply, err := lb.GetInstruct(ctx, meta, false)
+					reply, err := lb.GetInstruction(ctx, meta, false)
 					if err != nil {
 						slog.Error("Failed to get instruction", "user_id", meta.UserId, "group_id", meta.GroupId)
 						reply = "Something went wrong when fetching your instruction"
@@ -115,7 +137,7 @@ func (lb *LineBot) handleInstruction(ctx context.Context, meta TextMessageMeta) 
 }
 
 func (lb *LineBot) generateContent(ctx context.Context, meta TextMessageMeta) {
-	instruct, err := lb.GetInstruct(ctx, meta, true)
+	instruct, err := lb.GetInstruction(ctx, meta, true)
 	if err != nil {
 		slog.Error("Failed to get instruction", "user_id", meta.UserId, "group_id", meta.GroupId)
 	}
