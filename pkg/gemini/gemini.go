@@ -12,7 +12,7 @@ import (
 
 var _ llm.LLM = (*Gemini)(nil)
 
-const DefaultModel = "gemini-1.5-flash"
+const DefaultModel = "gemini-2.0-flash"
 
 type Gemini struct {
 	ctx    context.Context
