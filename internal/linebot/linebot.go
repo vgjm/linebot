@@ -133,13 +133,14 @@ func (lb *LineBot) handleGroupEvent(ctx context.Context, e webhook.MessageEvent,
 	slog.Info("Handling group event", "group_id", s.GroupId, "user_id", s.UserId)
 	switch m := e.Message.(type) {
 	case webhook.TextMessageContent:
+		text := strings.TrimSpace(m.Text)
 		slog.Info("Received text message", "original_text", m.Text)
-		if strings.HasPrefix(m.Text, "/") {
+		if strings.HasPrefix(text, "/") {
 			lb.handleTextMessage(ctx, TextMessageMeta{
 				Type:       GroupSource,
 				UserId:     s.UserId,
 				GroupId:    s.GroupId,
-				Text:       strings.Replace(m.Text, "/", "", 1),
+				Text:       strings.Replace(text, "/", "", 1),
 				ReplyToken: e.ReplyToken,
 				QuoteToken: m.QuoteToken,
 			})
