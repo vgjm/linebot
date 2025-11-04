@@ -144,6 +144,8 @@ func (lb *LineBot) handleGroupEvent(ctx context.Context, e webhook.MessageEvent,
 				ReplyToken: e.ReplyToken,
 				QuoteToken: m.QuoteToken,
 			})
+		} else {
+			slog.Info("Ignore regular group chat")
 		}
 	default:
 		slog.Error("Unknown message type", "message_type", e.Message.GetType())
