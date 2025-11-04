@@ -3,11 +3,9 @@ package gemini
 import (
 	"context"
 	"fmt"
-	"strings"
 
-	"github.com/google/generative-ai-go/genai"
 	"github.com/vgjm/linebot/pkg/llm"
-	"google.golang.org/api/option"
+	"google.golang.org/genai"
 )
 
 var _ llm.LLM = (*Gemini)(nil)
@@ -24,7 +22,9 @@ func New(ctx context.Context, apiKey string, model string) (*Gemini, error) {
 	if model == "" {
 		model = DefaultModel
 	}
-	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey: apiKey,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gemini client: %w", err)
 	}
@@ -37,34 +37,38 @@ func New(ctx context.Context, apiKey string, model string) (*Gemini, error) {
 }
 
 func (g *Gemini) GenerateContent(ctx context.Context, instruction, question string) (string, error) {
-	model := g.client.GenerativeModel(g.model)
-
-	// Set all harm block to none
-	// https://ai.google.dev/docs/safety_setting_gemini?hl=zh-cn#safety-settings
-	model.SafetySettings = []*genai.SafetySetting{
-		{
-			Category:  genai.HarmCategoryHarassment,
-			Threshold: genai.HarmBlockNone,
-		},
-		{
-			Category:  genai.HarmCategoryHateSpeech,
-			Threshold: genai.HarmBlockNone,
-		},
-		{
-			Category:  genai.HarmCategorySexuallyExplicit,
-			Threshold: genai.HarmBlockNone,
-		},
-		{
-			Category:  genai.HarmCategoryDangerousContent,
-			Threshold: genai.HarmBlockNone,
+	config := &genai.GenerateContentConfig{
+		// Set all harm block to none
+		// https://ai.google.dev/docs/safety_setting_gemini?hl=zh-cn#safety-settings
+		SafetySettings: []*genai.SafetySetting{
+			{
+				Category:  genai.HarmCategoryHarassment,
+				Threshold: genai.HarmBlockThresholdBlockNone,
+			},
+			{
+				Category:  genai.HarmCategoryHateSpeech,
+				Threshold: genai.HarmBlockThresholdBlockNone,
+			},
+			{
+				Category:  genai.HarmCategorySexuallyExplicit,
+				Threshold: genai.HarmBlockThresholdBlockNone,
+			},
+			{
+				Category:  genai.HarmCategoryDangerousContent,
+				Threshold: genai.HarmBlockThresholdBlockNone,
+			},
 		},
 	}
 
 	if instruction != "" {
-		model.SystemInstruction = genai.NewUserContent(genai.Text(instruction))
+		config.SystemInstruction = &genai.Content{
+			Parts: []*genai.Part{{
+				Text: instruction,
+			}},
+		}
 	}
 
-	resp, err := model.GenerateContent(ctx, genai.Text(question))
+	resp, err := g.client.Models.GenerateContent(ctx, g.model, genai.Text(question), config)
 	if err != nil {
 		return "", err
 	}
@@ -73,16 +77,14 @@ func (g *Gemini) GenerateContent(ctx context.Context, instruction, question stri
 	for _, cand := range resp.Candidates {
 		if cand.Content != nil {
 			for _, part := range cand.Content.Parts {
-				text += fmt.Sprint(part)
+				text += fmt.Sprint(part.Text)
 			}
 		}
 	}
-	text = strings.TrimSpace(text)
-	text = strings.ReplaceAll(text, "**", " ") // looks better
 
 	return text, nil
 }
 
 func (g *Gemini) Close() error {
-	return g.client.Close()
+	return nil
 }
