@@ -1,8 +1,6 @@
 module github.com/vgjm/linebot
 
-go 1.22.7
-
-toolchain go1.23.1
+go 1.25.3
 
 require (
 	github.com/aws/aws-lambda-go v1.47.0
