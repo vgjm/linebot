@@ -10,17 +10,18 @@ import (
 
 var _ llm.LLM = (*Gemini)(nil)
 
-const DefaultModel = "gemini-2.5-flash"
+var DefaultModels = []string{"gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash-lite"}
 
 type Gemini struct {
 	ctx    context.Context
 	client *genai.Client
-	model  string
+	models []string
 }
 
 func New(ctx context.Context, apiKey string, model string) (*Gemini, error) {
-	if model == "" {
-		model = DefaultModel
+	models := DefaultModels
+	if model != "" {
+		models = append([]string{model}, models...)
 	}
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: apiKey,
@@ -32,7 +33,7 @@ func New(ctx context.Context, apiKey string, model string) (*Gemini, error) {
 	return &Gemini{
 		ctx:    ctx,
 		client: client,
-		model:  model,
+		models: models,
 	}, nil
 }
 
@@ -68,21 +69,27 @@ func (g *Gemini) GenerateContent(ctx context.Context, instruction, question stri
 		}
 	}
 
-	resp, err := g.client.Models.GenerateContent(ctx, g.model, genai.Text(question), config)
-	if err != nil {
-		return "", err
-	}
+	var resp *genai.GenerateContentResponse
+	var err error
+	for _, m := range g.models {
+		resp, err = g.client.Models.GenerateContent(ctx, m, genai.Text(question), config)
+		if err != nil {
+			continue
+		}
 
-	var text string
-	for _, cand := range resp.Candidates {
-		if cand.Content != nil {
-			for _, part := range cand.Content.Parts {
-				text += fmt.Sprint(part.Text)
+		var text string
+		for _, cand := range resp.Candidates {
+			if cand.Content != nil {
+				for _, part := range cand.Content.Parts {
+					text += fmt.Sprint(part.Text)
+				}
 			}
 		}
+
+		return text, nil
 	}
 
-	return text, nil
+	return "", err
 }
 
 func (g *Gemini) Close() error {
